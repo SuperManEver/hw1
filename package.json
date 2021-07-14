@@ -5,7 +5,9 @@
   "author": "Nik Luparev",
   "license": "MIT",
   "scripts": {
-    "lint": "eslint src --ext .js"
+    "start": "node ./src/main.js",
+    "lint": "eslint src --ext .js",
+    "clear": "rm -rf ./result"
   },
   "devDependencies": {
     "eslint": "^7.30.0",
@@ -17,5 +19,8 @@
   "volta": {
     "node": "14.17.3",
     "yarn": "1.22.10"
+  },
+  "dependencies": {
+    "loglevel": "^1.7.1"
   }
 }
