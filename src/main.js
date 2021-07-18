@@ -1,53 +1,57 @@
 const path = require('path');
 const fs = require('fs');
 const log = require('loglevel');
-const { last, mkDirIfNecessary } = require('./utils');
 
-const DEFAULT_SOURCE_DIR = 'source';
-const DEFAUL_DEST_DIR = 'dist';
+const {
+  last,
+  mkDirIfNecessary,
+  stat,
+  mkdir,
+  readdir,
+  extractCLIArgs
+} = require('./utils');
 
-const CLI_SOURCE_DIR_ARG = '--source';
-const CLI_DIST_DIR_ARG = '--destination';
+async function getAllPaths(dirPath, cb) {
+  try {
+    const files = await readdir(dirPath);
 
-function getAllPaths(dirPath, cb) {
-  fs.readdir(dirPath, (err, files) => {
-    if (err) {
-      cb(err, null);
-    }
-
-    files.forEach((file) => {
+    files.forEach(async (file) => {
       const nodePath = path.join(dirPath, file);
-      const nodeInfo = fs.statSync(nodePath);
+      const nodeInfo = await stat(nodePath);
 
       if (nodeInfo.isFile()) {
-        cb(null, nodePath);
+        cb(nodePath);
       } else {
         getAllPaths(nodePath, cb);
       }
     });
-  });
+  } catch (err) {
+    log.error(
+      'Error occurred on attempt to fetch files for path: ',
+      dirPath,
+      err
+    );
+  }
 }
 
-function createDistDir(dirName, cb) {
+async function createDistDir(dirName) {
   const dirPath = path.join(process.cwd(), dirName);
 
   if (fs.existsSync(dirPath)) {
-    cb(dirPath);
-    return;
+    return dirPath;
   }
 
-  fs.mkdir(dirPath, (err) => {
-    if (err) {
-      log.error(err);
-    }
+  await mkdir(dirPath);
 
-    cb(dirPath);
-  });
+  return dirPath;
 }
 
 function copyFile(filePath, toDir) {
   const fileName = last(filePath.split('/'));
   const dirName = fileName[0].toUpperCase();
+
+  if (!fileName || !toDir) return;
+
   const destDirPath = path.join(toDir, dirName);
 
   mkDirIfNecessary(destDirPath, () => {
@@ -59,39 +63,21 @@ function copyFile(filePath, toDir) {
   });
 }
 
-function extractCLIArgs() {
-  const args = process.argv;
-
-  const sourceDir =
-    args[args.indexOf(CLI_SOURCE_DIR_ARG) + 1] || DEFAULT_SOURCE_DIR;
-
-  const destinationDir =
-    args[args.indexOf(CLI_DIST_DIR_ARG) + 1] || DEFAUL_DEST_DIR;
-
-  return { sourceDir, destinationDir };
-}
-
-function main(arg) {
+async function main(arg) {
   const { sourceDir, destinationDir } = extractCLIArgs();
 
   const sourceDirPath = path.join(process.cwd(), sourceDir);
 
-  fs.stat(sourceDirPath, (err) => {
-    if (err) {
-      log.error("Provided directory doesn't exist!");
-      process.exit(1);
-    }
+  try {
+    await stat(sourceDirPath);
 
-    createDistDir(destinationDir, (distDirPath) => {
-      getAllPaths(sourceDirPath, (err, filePath) => {
-        if (err) {
-          log.error(err);
-        }
+    const distDirPath = await createDistDir(destinationDir);
 
-        copyFile(filePath, distDirPath);
-      });
-    });
-  });
+    getAllPaths(sourceDirPath, (filePath) => copyFile(filePath, distDirPath));
+  } catch (err) {
+    log.error("Provided directory doesn't exist!");
+    process.exit(1);
+  }
 }
 
 main();
